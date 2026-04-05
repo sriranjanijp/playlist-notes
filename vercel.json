@@ -10,9 +10,5 @@
       "source": "/((?!api).*)",
       "destination": "/index.html"
     }
-  ],
-  "env": {
-    "SPOTIFY_CLIENT_ID": "@SPOTIFY_CLIENT_ID",
-    "SPOTIFY_CLIENT_SECRET": "@SPOTIFY_CLIENT_SECRET"
-  }
+  ]
 }
