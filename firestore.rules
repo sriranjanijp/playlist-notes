@@ -1,0 +1,34 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /sessions/{sessionId} {
+
+      // Anyone with the link can read (receiver view)
+      allow read: if true;
+
+      // Anyone can create a new session (sender creates on Home page)
+      allow create: if
+        // Must include all required fields
+        request.resource.data.keys().hasAll([
+          'playlistId', 'playlistName', 'playlistImage',
+          'ownerName', 'tracks', 'notes', 'createdAt'
+        ]) &&
+        // notes must start empty
+        request.resource.data.notes == {} &&
+        // tracks must be a list
+        request.resource.data.tracks is list;
+
+      // Only the notes map may be updated — no other field can change
+      allow update: if
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['notes']) &&
+        // Each note value must be a string under 281 chars
+        request.resource.data.notes.values().toSet().difference(
+          request.resource.data.notes.values().toSet()
+        ).size() == 0;
+
+      // Nobody can delete sessions via the client
+      allow delete: if false;
+    }
+  }
+}
