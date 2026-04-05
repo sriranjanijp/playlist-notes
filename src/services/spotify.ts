@@ -17,15 +17,41 @@ export function parsePlaylistId(input: string): string | null {
 }
 
 /**
- * Fetch a playlist from our Express proxy (Client Credentials, secret stays
- * on the server).
+ * Fetch a playlist from our Vercel serverless function / local Express proxy.
+ * Handles non-JSON responses gracefully so users see a real error message.
  */
 export async function fetchPlaylist(playlistId: string): Promise<SpotifyPlaylist> {
-  const res = await fetch(`/api/playlist/${playlistId}`);
+  let res: Response;
+
+  try {
+    res = await fetch(`/api/playlist/${playlistId}`);
+  } catch {
+    throw new Error('Network error — could not reach the server. Check your connection.');
+  }
+
+  const contentType = res.headers.get('content-type') ?? '';
+
+  // If the server returned HTML (Vercel error page, function crash, wrong route),
+  // extract readable text instead of letting JSON.parse blow up.
+  if (!contentType.includes('application/json')) {
+    const raw = await res.text();
+    const preview = raw
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 200);
+    throw new Error(
+      `Unexpected response from server (HTTP ${res.status}).\n` +
+      `Expected JSON but got: ${contentType || 'unknown content type'}.\n\n` +
+      `This usually means the serverless function crashed or env vars are missing.\n` +
+      `Raw preview: ${preview}`
+    );
+  }
+
   const data = await res.json() as SpotifyPlaylist & { error?: string };
 
   if (!res.ok) {
-    throw new Error(data.error ?? `Failed to fetch playlist (${res.status})`);
+    throw new Error(data.error ?? `Spotify API error (HTTP ${res.status})`);
   }
 
   return data;
