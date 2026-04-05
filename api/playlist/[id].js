@@ -1,58 +1,59 @@
+// api/playlist/[id].js  — Vercel serverless function
+
 let tokenCache = { value: null, expiresAt: 0 };
 
 async function getAccessToken() {
-  if (tokenCache.value && Date.now() < tokenCache.expiresAt) return tokenCache.value;
+  if (tokenCache.value && Date.now() < tokenCache.expiresAt) {
+    return tokenCache.value;
+  }
 
   const clientId     = process.env.SPOTIFY_CLIENT_ID;
   const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+
   if (!clientId || !clientSecret) {
-    throw new Error('SPOTIFY_CLIENT_ID or SPOTIFY_CLIENT_SECRET not set in Vercel environment variables.');
+    throw new Error(
+      'SPOTIFY_CLIENT_ID or SPOTIFY_CLIENT_SECRET is not set. ' +
+      'Add them in Vercel → Project Settings → Environment Variables, then redeploy.'
+    );
   }
 
-  const creds = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-  const res   = await fetch('https://accounts.spotify.com/api/token', {
-    method:  'POST',
-    headers: { Authorization: `Basic ${creds}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-    body:    'grant_type=client_credentials',
+  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+
+  const res = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${credentials}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: 'grant_type=client_credentials',
   });
 
   if (!res.ok) {
-    const t = await res.text();
-    let m = `Token request failed (HTTP ${res.status})`;
-    try { m = JSON.parse(t).error_description || m; } catch {}
-    throw new Error(m);
+    const text = await res.text();
+    let msg = `Spotify token request failed (HTTP ${res.status})`;
+    try { const j = JSON.parse(text); msg = j.error_description || j.error || msg; } catch { }
+    throw new Error(msg);
   }
 
   const data = await res.json();
-  tokenCache = { value: data.access_token, expiresAt: Date.now() + (data.expires_in - 60) * 1000 };
+  tokenCache = {
+    value: data.access_token,
+    expiresAt: Date.now() + (data.expires_in - 60) * 1000,
+  };
   return tokenCache.value;
-}
-
-/** Fetch all tracks for a playlist via the /tracks endpoint (handles pagination) */
-async function fetchAllTracks(playlistId, token) {
-  const items = [];
-  let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&market=US`;
-
-  while (url) {
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) {
-      console.error(`[Spotify] /tracks → ${res.status}`);
-      break;
-    }
-    const page = await res.json();
-    items.push(...(page.items ?? []));
-    url = page.next ?? null;
-  }
-
-  return items;
 }
 
 export default async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json');
-  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
   const { id } = req.query;
-  if (!id) return res.status(400).json({ error: 'Missing playlist id' });
+  if (!id || typeof id !== 'string') {
+    return res.status(400).json({ error: 'Missing playlist id' });
+  }
 
   let token;
   try {
@@ -62,51 +63,36 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Fetch playlist metadata (no fields filter to avoid partial responses)
-    const plRes = await fetch(
+    // Fetch without `fields` filter — avoids 403s on certain playlist types
+    // and Spotify's field-filtering quirks. We only store what we need in Firestore.
+    const playlistRes = await fetch(
       `https://api.spotify.com/v1/playlists/${id}?market=US`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
 
-    if (!plRes.ok) {
-      const e = await plRes.json().catch(() => ({}));
-      console.error(`[Spotify] playlist/${id} → ${plRes.status}`, e);
-      return res.status(plRes.status).json({ error: e.error?.message || `Spotify error (HTTP ${plRes.status})` });
+    // Log the full error body to Vercel function logs for easier debugging
+    if (!playlistRes.ok) {
+      const errText = await playlistRes.text();
+      console.error(`[Spotify] GET /playlists/${id} → ${playlistRes.status}:`, errText);
+      let errMsg = `Playlist not found (HTTP ${playlistRes.status})`;
+      try { errMsg = JSON.parse(errText).error?.message || errMsg; } catch { }
+      return res.status(playlistRes.status).json({ error: errMsg });
     }
 
-    const playlist = await plRes.json();
+    const playlist = await playlistRes.json();
 
-    // Log top-level keys so we can see the actual shape Spotify returned
-    console.log(`[Spotify] playlist/${id} keys:`, Object.keys(playlist));
-
-    if (!playlist.tracks) {
-      // Fallback: try fetching tracks from the dedicated /tracks endpoint
-      console.warn(`[Spotify] No tracks on main response — falling back to /tracks endpoint`);
-      const items = await fetchAllTracks(id, token);
-
-      if (items.length === 0) {
-        return res.status(502).json({
-          error: `Spotify returned no track data for this playlist. ` +
-                 `This can happen with algorithmic playlists (Discover Weekly, Daily Mixes, charts) ` +
-                 `which are not accessible via the API with Client Credentials. ` +
-                 `Try a regular user-created or editorial playlist instead.`,
-        });
-      }
-
-      playlist.tracks = { items, total: items.length };
-    } else {
-      // Page through remaining tracks if total > 100
-      let offset = 100;
-      while (offset < playlist.tracks.total) {
-        const pg = await fetch(
-          `https://api.spotify.com/v1/playlists/${id}/tracks?offset=${offset}&limit=100&market=US`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        if (!pg.ok) break;
-        const pgData = await pg.json();
-        playlist.tracks.items.push(...(pgData.items ?? []));
-        offset += 100;
-      }
+    // Page through tracks beyond the first 100
+    const total = playlist.tracks.total;
+    let offset = 100;
+    while (offset < total) {
+      const pageRes = await fetch(
+        `https://api.spotify.com/v1/playlists/${id}/tracks?offset=${offset}&limit=100&market=US`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!pageRes.ok) break; // partial playlist is better than nothing
+      const page = await pageRes.json();
+      playlist.tracks.items.push(...page.items);
+      offset += 100;
     }
 
     res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate');
