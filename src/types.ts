@@ -1,15 +1,13 @@
 import type { Timestamp } from 'firebase/firestore';
 
-// ── Domain models ──────────────────────────────────────────────────────────────
-
 export interface Track {
   id:         string;
   name:       string;
   artists:    string;
   album:      string;
   albumArt:   string;
-  duration:   number;     // milliseconds
-  previewUrl: string;     // Spotify 30-sec MP3 — empty string if unavailable
+  duration:   number;
+  previewUrl: string;  // Spotify 30-sec MP3 preview — empty string if unavailable
 }
 
 export interface Session {
@@ -23,49 +21,26 @@ export interface Session {
   createdAt?:    Timestamp;
 }
 
-// ── Spotify API shapes ─────────────────────────────────────────────────────────
-
 export interface SpotifyImage {
-  url:    string;
-  width:  number | null;
-  height: number | null;
+  url: string; width: number | null; height: number | null;
 }
-
-export interface SpotifyArtist {
-  name: string;
-}
-
-export interface SpotifyAlbum {
-  name:   string;
-  images: SpotifyImage[];
-}
-
-export interface SpotifyTrack {
-  id:            string;
-  name:          string;
-  duration_ms:   number;
-  artists:       SpotifyArtist[];
-  album:         SpotifyAlbum;
-  preview_url:   string | null;
-}
-
-export interface SpotifyPlaylistItem {
-  track: SpotifyTrack | null;
-}
-
-export interface SpotifyPlaylist {
+export interface SpotifyArtist { name: string; }
+export interface SpotifyAlbum  { name: string; images: SpotifyImage[]; }
+export interface SpotifyTrack  {
   id:          string;
   name:        string;
-  description: string;
-  images:      SpotifyImage[];
-  owner:       { display_name: string };
-  tracks: {
-    total: number;
-    items: SpotifyPlaylistItem[];
-  };
+  duration_ms: number;
+  artists:     SpotifyArtist[];
+  album:       SpotifyAlbum;
+  preview_url: string | null;
 }
-
-// ── Context ────────────────────────────────────────────────────────────────────
+export interface SpotifyPlaylistItem { track: SpotifyTrack | null; }
+export interface SpotifyPlaylist {
+  id: string; name: string; description: string;
+  images: SpotifyImage[];
+  owner:  { display_name: string };
+  tracks: { total: number; items: SpotifyPlaylistItem[]; };
+}
 
 export interface PlaylistContextValue {
   session:     Session | null;
