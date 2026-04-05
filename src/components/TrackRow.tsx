@@ -1,32 +1,26 @@
 import { useCallback } from 'react';
 import { formatDuration } from '../services/spotify';
+import PreviewPlayer from './PreviewPlayer';
 import type { Track } from '../types';
 
-const MAX_NOTE_LENGTH = 280;
+const MAX_NOTE_LENGTH = 2000;
 
 interface TrackRowProps {
-  track:        Track;
-  note:         string;
-  readOnly:     boolean;
-  index:        number;
+  track:         Track;
+  note:          string;
+  readOnly:      boolean;
+  index:         number;
   onNoteChange?: (trackId: string, text: string) => void;
 }
 
-export default function TrackRow({
-  track,
-  note = '',
-  readOnly,
-  onNoteChange,
-  index,
-}: TrackRowProps) {
+export default function TrackRow({ track, note = '', readOnly, onNoteChange, index }: TrackRowProps) {
   const handleChange = useCallback(
-    (e: React.ChangeEvent<HTMLTextAreaElement>) =>
-      onNoteChange?.(track.id, e.target.value),
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => onNoteChange?.(track.id, e.target.value),
     [track.id, onNoteChange]
   );
 
   const charsLeft = MAX_NOTE_LENGTH - note.length;
-  const nearLimit = charsLeft <= 40 && note.length > 0;
+  const nearLimit = charsLeft <= 100 && note.length > 0;
   const atLimit   = charsLeft <= 0;
 
   return (
@@ -35,12 +29,14 @@ export default function TrackRow({
       <div className="track-info">
         <span className="track-index">{index + 1}</span>
 
+        <PreviewPlayer previewUrl={track.previewUrl} trackName={track.name} />
+
         {track.albumArt ? (
           <img src={track.albumArt} alt={track.album} className="track-art" />
         ) : (
           <div className="track-art track-art--placeholder">
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 3a9 9 0 1 0 0 18A9 9 0 0 0 12 3zm0 16a7 7 0 1 1 0-14 7 7 0 0 1 0 14zm-1-9v4l3.5 2-1 1.73L9 16V9h2z" />
+            <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+              <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"/>
             </svg>
           </div>
         )}
@@ -56,7 +52,7 @@ export default function TrackRow({
       {/* ── Note field ── */}
       <div className="note-field">
         {readOnly ? (
-          <p className={`note-display ${!note ? 'note-display--empty' : ''}`}>
+          <p className={`note-display${!note ? ' note-display--empty' : ''}`}>
             {note || 'No note added'}
           </p>
         ) : (
@@ -66,13 +62,11 @@ export default function TrackRow({
               value={note}
               onChange={handleChange}
               placeholder="Add a note for this track…"
-              rows={2}
+              rows={3}
               maxLength={MAX_NOTE_LENGTH}
             />
-            {note.length > 0 && (
-              <span
-                className={`char-count${nearLimit ? ' char-count--warn' : ''}${atLimit ? ' char-count--limit' : ''}`}
-              >
+            {nearLimit && (
+              <span className={`char-count${atLimit ? ' char-count--limit' : ' char-count--warn'}`}>
                 {charsLeft}
               </span>
             )}
