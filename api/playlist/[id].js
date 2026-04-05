@@ -28,6 +28,25 @@ async function getAccessToken() {
   return tokenCache.value;
 }
 
+/** Fetch all tracks for a playlist via the /tracks endpoint (handles pagination) */
+async function fetchAllTracks(playlistId, token) {
+  const items = [];
+  let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&market=US`;
+
+  while (url) {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) {
+      console.error(`[Spotify] /tracks → ${res.status}`);
+      break;
+    }
+    const page = await res.json();
+    items.push(...(page.items ?? []));
+    url = page.next ?? null;
+  }
+
+  return items;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json');
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
@@ -43,7 +62,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // No `fields` filter — avoids Spotify's quirky partial-response behaviour
+    // Fetch playlist metadata (no fields filter to avoid partial responses)
     const plRes = await fetch(
       `https://api.spotify.com/v1/playlists/${id}?market=US`,
       { headers: { Authorization: `Bearer ${token}` } }
@@ -57,23 +76,37 @@ export default async function handler(req, res) {
 
     const playlist = await plRes.json();
 
-    // Guard — if tracks is missing for any reason, return what we have
-    if (!playlist.tracks) {
-      console.error('[Spotify] Response missing tracks object:', JSON.stringify(playlist).slice(0, 300));
-      return res.status(502).json({ error: 'Spotify returned an unexpected response — missing tracks data.' });
-    }
+    // Log top-level keys so we can see the actual shape Spotify returned
+    console.log(`[Spotify] playlist/${id} keys:`, Object.keys(playlist));
 
-    // Page through tracks beyond the first 100
-    let offset = 100;
-    while (offset < playlist.tracks.total) {
-      const pg = await fetch(
-        `https://api.spotify.com/v1/playlists/${id}/tracks?offset=${offset}&limit=100&market=US`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (!pg.ok) break;
-      const pgData = await pg.json();
-      playlist.tracks.items.push(...(pgData.items ?? []));
-      offset += 100;
+    if (!playlist.tracks) {
+      // Fallback: try fetching tracks from the dedicated /tracks endpoint
+      console.warn(`[Spotify] No tracks on main response — falling back to /tracks endpoint`);
+      const items = await fetchAllTracks(id, token);
+
+      if (items.length === 0) {
+        return res.status(502).json({
+          error: `Spotify returned no track data for this playlist. ` +
+                 `This can happen with algorithmic playlists (Discover Weekly, Daily Mixes, charts) ` +
+                 `which are not accessible via the API with Client Credentials. ` +
+                 `Try a regular user-created or editorial playlist instead.`,
+        });
+      }
+
+      playlist.tracks = { items, total: items.length };
+    } else {
+      // Page through remaining tracks if total > 100
+      let offset = 100;
+      while (offset < playlist.tracks.total) {
+        const pg = await fetch(
+          `https://api.spotify.com/v1/playlists/${id}/tracks?offset=${offset}&limit=100&market=US`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (!pg.ok) break;
+        const pgData = await pg.json();
+        playlist.tracks.items.push(...(pgData.items ?? []));
+        offset += 100;
+      }
     }
 
     res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate');
