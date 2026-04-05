@@ -1,4 +1,7 @@
-// api/playlist/[id].js  — Vercel serverless function
+// api/playlist/[id].js
+// Vercel serverless function — runs server-side, keeps Spotify secret off the client.
+// Replaces server/index.js for production. The Express server is still useful for
+// local dev if you prefer, but this file takes over on Vercel.
 
 let tokenCache = { value: null, expiresAt: 0 };
 
@@ -7,18 +10,9 @@ async function getAccessToken() {
     return tokenCache.value;
   }
 
-  const clientId     = process.env.SPOTIFY_CLIENT_ID;
-  const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) {
-    throw new Error(
-      'SPOTIFY_CLIENT_ID or SPOTIFY_CLIENT_SECRET is not set. ' +
-      'Add them in Vercel → Project Settings → Environment Variables, ' +
-      'then redeploy.'
-    );
-  }
-
-  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+  const credentials = Buffer.from(
+    `${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`
+  ).toString('base64');
 
   const res = await fetch('https://accounts.spotify.com/api/token', {
     method: 'POST',
@@ -30,13 +24,8 @@ async function getAccessToken() {
   });
 
   if (!res.ok) {
-    const text = await res.text();
-    let msg = `Spotify token request failed (HTTP ${res.status})`;
-    try {
-      const json = JSON.parse(text);
-      msg = json.error_description || json.error || msg;
-    } catch { /* keep default */ }
-    throw new Error(msg);
+    const err = await res.json();
+    throw new Error(err.error_description || 'Failed to get Spotify token');
   }
 
   const data = await res.json();
@@ -49,9 +38,7 @@ async function getAccessToken() {
 }
 
 export default async function handler(req, res) {
-  // Always return JSON — never let an unhandled error return HTML
-  res.setHeader('Content-Type', 'application/json');
-
+  // Only allow GET
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -62,14 +49,9 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing playlist id' });
   }
 
-  let token;
   try {
-    token = await getAccessToken();
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
+    const token = await getAccessToken();
 
-  try {
     const fields = [
       'id', 'name', 'description', 'images',
       'owner.display_name',
@@ -83,15 +65,15 @@ export default async function handler(req, res) {
     );
 
     if (!playlistRes.ok) {
-      const errData = await playlistRes.json().catch(() => ({}));
+      const err = await playlistRes.json();
       return res
         .status(playlistRes.status)
-        .json({ error: errData.error?.message || `Playlist not found (HTTP ${playlistRes.status})` });
+        .json({ error: err.error?.message || 'Playlist not found' });
     }
 
     const playlist = await playlistRes.json();
 
-    // Page through tracks beyond the first 100
+    // Page through tracks if playlist has more than 100
     const total = playlist.tracks.total;
     if (total > 100) {
       let offset = 100;
@@ -107,10 +89,11 @@ export default async function handler(req, res) {
       }
     }
 
+    // Cache the response at the CDN edge for 5 minutes
     res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate');
     return res.status(200).json(playlist);
-
   } catch (err) {
-    return res.status(500).json({ error: err.message ?? 'Internal server error' });
+    console.error('[Spotify]', err.message);
+    return res.status(500).json({ error: err.message });
   }
 }
