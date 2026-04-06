@@ -1,19 +1,6 @@
-/**
- * Spotify PKCE Authorization Code Flow.
- *
- * The client ID is safe to ship in frontend code.
- * The client secret is never used — PKCE replaces it.
- *
- * Flow:
- *   1. initiateSpotifyAuth()  → redirects to Spotify login
- *   2. handleAuthCallback()   → call on page load if ?code= is in URL
- *                               exchanges code for token, clears URL
- *   3. getStoredToken()       → returns token if valid, null if expired/missing
- */
-
-const CLIENT_ID   = import.meta.env.VITE_SPOTIFY_CLIENT_ID as string;
-const SCOPES      = 'playlist-read-private playlist-read-collaborative';
-const TOKEN_KEY   = 'sn_token';
+const CLIENT_ID    = import.meta.env.VITE_SPOTIFY_CLIENT_ID as string;
+const SCOPES       = 'playlist-read-private playlist-read-collaborative';
+const TOKEN_KEY    = 'sn_token';
 const VERIFIER_KEY = 'sn_pkce_verifier';
 
 // ── PKCE helpers ───────────────────────────────────────────────────────────────
@@ -25,26 +12,36 @@ function generateVerifier(length = 128): string {
 }
 
 async function generateChallenge(verifier: string): Promise<string> {
-  const data    = new TextEncoder().encode(verifier);
-  const digest  = await crypto.subtle.digest('SHA-256', data);
+  const data   = new TextEncoder().encode(verifier);
+  const digest = await crypto.subtle.digest('SHA-256', data);
   return btoa(String.fromCharCode(...new Uint8Array(digest)))
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 // ── Token storage ──────────────────────────────────────────────────────────────
 
-interface StoredToken {
+export interface StoredToken {
   accessToken:  string;
   refreshToken: string;
   expiresAt:    number;
 }
 
-function saveToken(data: { access_token: string; refresh_token: string; expires_in: number }) {
+function saveToken(data: Record<string, unknown>): void {
+  // Validate before saving — catches undefined/missing fields early
+  if (!data.access_token || typeof data.access_token !== 'string') {
+    console.error('[spotifyAuth] saveToken: unexpected response from Spotify:', data);
+    throw new Error(
+      `Spotify token response missing access_token. Got keys: ${Object.keys(data).join(', ')}`
+    );
+  }
+
   const stored: StoredToken = {
     accessToken:  data.access_token,
-    refreshToken: data.refresh_token,
-    expiresAt:    Date.now() + (data.expires_in - 60) * 1000,
+    refreshToken: (data.refresh_token as string) ?? '',
+    expiresAt:    Date.now() + ((data.expires_in as number ?? 3600) - 60) * 1000,
   };
+
+  console.log('[spotifyAuth] Token saved, expires in', Math.round((stored.expiresAt - Date.now()) / 1000), 's');
   localStorage.setItem(TOKEN_KEY, JSON.stringify(stored));
 }
 
@@ -52,8 +49,22 @@ export function getStoredToken(): StoredToken | null {
   try {
     const raw = localStorage.getItem(TOKEN_KEY);
     if (!raw) return null;
-    const stored: StoredToken = JSON.parse(raw);
-    if (Date.now() > stored.expiresAt) return null; // expired
+
+    const stored = JSON.parse(raw) as StoredToken;
+
+    // Guard: reject tokens where accessToken is missing or not a real string
+    if (!stored.accessToken || stored.accessToken === 'undefined') {
+      console.warn('[spotifyAuth] Stored token has invalid accessToken — clearing');
+      localStorage.removeItem(TOKEN_KEY);
+      return null;
+    }
+
+    if (Date.now() > stored.expiresAt) {
+      console.warn('[spotifyAuth] Token expired — clearing');
+      localStorage.removeItem(TOKEN_KEY);
+      return null;
+    }
+
     return stored;
   } catch {
     return null;
@@ -68,11 +79,16 @@ export function clearToken(): void {
 // ── Auth flow ──────────────────────────────────────────────────────────────────
 
 export async function initiateSpotifyAuth(): Promise<void> {
-  const verifier   = generateVerifier();
-  const challenge  = await generateChallenge(verifier);
+  if (!CLIENT_ID) {
+    throw new Error('VITE_SPOTIFY_CLIENT_ID is not set. Add it to your Vercel environment variables.');
+  }
+
+  const verifier    = generateVerifier();
+  const challenge   = await generateChallenge(verifier);
   const redirectUri = `${window.location.origin}/`;
 
   localStorage.setItem(VERIFIER_KEY, verifier);
+  console.log('[spotifyAuth] Starting PKCE flow, redirect:', redirectUri);
 
   const params = new URLSearchParams({
     client_id:             CLIENT_ID,
@@ -86,23 +102,19 @@ export async function initiateSpotifyAuth(): Promise<void> {
   window.location.href = `https://accounts.spotify.com/authorize?${params}`;
 }
 
-/**
- * Call on every page load.
- * If the URL contains ?code=..., exchanges it for a token and cleans the URL.
- * Returns true if a token was obtained.
- */
 export async function handleAuthCallback(): Promise<boolean> {
   const params = new URLSearchParams(window.location.search);
   const code   = params.get('code');
   const error  = params.get('error');
 
-  // Clean the URL regardless
   if (code || error) {
     window.history.replaceState({}, '', window.location.pathname);
   }
 
   if (error) throw new Error(`Spotify auth denied: ${error}`);
-  if (!code) return false;
+  if (!code)  return false;
+
+  console.log('[spotifyAuth] Handling callback, code length:', code.length);
 
   const verifier    = localStorage.getItem(VERIFIER_KEY);
   const redirectUri = `${window.location.origin}/`;
@@ -110,7 +122,7 @@ export async function handleAuthCallback(): Promise<boolean> {
   if (!verifier) throw new Error('PKCE verifier missing — please try connecting again.');
 
   const res = await fetch('https://accounts.spotify.com/api/token', {
-    method: 'POST',
+    method:  'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       client_id:     CLIENT_ID,
@@ -121,12 +133,19 @@ export async function handleAuthCallback(): Promise<boolean> {
     }),
   });
 
+  // Read body once
+  const responseData = await res.json().catch(() => ({})) as Record<string, unknown>;
+  console.log('[spotifyAuth] Token exchange status:', res.status, 'keys:', Object.keys(responseData));
+
   if (!res.ok) {
-    const e = await res.json().catch(() => ({}));
-    throw new Error(e.error_description ?? `Token exchange failed (HTTP ${res.status})`);
+    throw new Error(
+      (responseData.error_description as string) ??
+      (responseData.error as string) ??
+      `Token exchange failed (HTTP ${res.status})`
+    );
   }
 
-  saveToken(await res.json());
+  saveToken(responseData);
   localStorage.removeItem(VERIFIER_KEY);
   return true;
 }
