@@ -17,16 +17,31 @@ export default function Home() {
   const [errorMsg, setErrorMsg] = useState('');
   const navigate = useNavigate();
 
-  // On mount: handle OAuth callback or restore existing token
   useEffect(() => {
     async function init() {
       try {
+        // Always try to handle callback first — this stores the token
         const wasCallback = await handleAuthCallback();
-        if (wasCallback || getStoredToken()) {
-          setStatus('authenticated');
-        } else {
-          setStatus('unauthenticated');
+
+        if (wasCallback) {
+          // Token was just saved from OAuth — verify it's readable
+          const token = getStoredToken();
+          if (token) {
+            setStatus('authenticated');
+          } else {
+            // handleAuthCallback succeeded but token didn't persist
+            // This can happen if sessionStorage is blocked (private browsing, etc.)
+            setErrorMsg(
+              'Token could not be saved. If you\'re in private/incognito mode, ' +
+              'try a regular browser window.'
+            );
+            setStatus('unauthenticated');
+          }
+          return;
         }
+
+        const token = getStoredToken();
+        setStatus(token ? 'authenticated' : 'unauthenticated');
       } catch (err) {
         setErrorMsg(err instanceof Error ? err.message : 'Auth error');
         setStatus('unauthenticated');
@@ -40,7 +55,13 @@ export default function Home() {
     setErrorMsg('');
 
     const token = getStoredToken();
-    if (!token) { setStatus('unauthenticated'); return; }
+
+    if (!token) {
+      // Token expired or missing — prompt re-auth instead of silently failing
+      setStatus('unauthenticated');
+      setErrorMsg('Your Spotify session expired. Please reconnect.');
+      return;
+    }
 
     const playlistId = parsePlaylistId(input);
     if (!playlistId) {
@@ -54,8 +75,16 @@ export default function Home() {
       const sessionId = await createSession(playlist);
       navigate(`/edit/${sessionId}`);
     } catch (err) {
-      setStatus('error');
-      setErrorMsg(err instanceof Error ? err.message : 'Something went wrong.');
+      const msg = err instanceof Error ? err.message : 'Something went wrong.';
+      // If Spotify says 401, the token is bad — force re-auth
+      if (msg.includes('401') || msg.toLowerCase().includes('token')) {
+        clearToken();
+        setStatus('unauthenticated');
+        setErrorMsg('Spotify session expired. Please reconnect.');
+      } else {
+        setStatus('error');
+        setErrorMsg(msg);
+      }
     }
   }
 
@@ -66,16 +95,13 @@ export default function Home() {
     setErrorMsg('');
   }
 
-  // ── Render states ────────────────────────────────────────────────────────────
+  // ── Render ───────────────────────────────────────────────────────────────────
 
   if (status === 'checking') {
     return (
       <div className="home-page">
         <div className="home-card">
-          <div className="home-logo">
-            <SpotifyIcon />
-            <span>Playlist Notes</span>
-          </div>
+          <div className="home-logo"><SpotifyIcon /><span>Playlist Notes</span></div>
           <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem 0' }}>
             <span className="spinner spinner--lg" />
           </div>
@@ -87,10 +113,7 @@ export default function Home() {
   return (
     <div className="home-page">
       <div className="home-card">
-        <div className="home-logo">
-          <SpotifyIcon />
-          <span>Playlist Notes</span>
-        </div>
+        <div className="home-logo"><SpotifyIcon /><span>Playlist Notes</span></div>
 
         <h1 className="home-title">Annotate any Spotify playlist</h1>
         <p className="home-subtitle">
@@ -98,19 +121,21 @@ export default function Home() {
         </p>
 
         {status === 'unauthenticated' ? (
-          /* ── Not connected ── */
           <div className="connect-section">
-            {errorMsg && <p className="form-error" style={{ marginBottom: '1rem' }}>{errorMsg}</p>}
+            {errorMsg && (
+              <p className="form-error" style={{ marginBottom: '1rem', textAlign: 'center' }}>
+                {errorMsg}
+              </p>
+            )}
             <button className="btn-spotify" onClick={initiateSpotifyAuth}>
               <SpotifyIcon size={20} />
               Connect with Spotify
             </button>
             <p className="home-hint" style={{ marginTop: '1rem' }}>
-              We only request read access to your playlists. We never modify your Spotify account.
+              We only request read access to your playlists.
             </p>
           </div>
         ) : (
-          /* ── Connected ── */
           <form className="home-form" onSubmit={handleCreate}>
             <div className="connected-badge">
               <SpotifyIcon size={14} color="var(--accent)" />

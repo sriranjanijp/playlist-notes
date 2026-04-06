@@ -45,12 +45,12 @@ function saveToken(data: { access_token: string; refresh_token: string; expires_
     refreshToken: data.refresh_token,
     expiresAt:    Date.now() + (data.expires_in - 60) * 1000,
   };
-  sessionStorage.setItem(TOKEN_KEY, JSON.stringify(stored));
+  localStorage.setItem(TOKEN_KEY, JSON.stringify(stored));
 }
 
 export function getStoredToken(): StoredToken | null {
   try {
-    const raw = sessionStorage.getItem(TOKEN_KEY);
+    const raw = localStorage.getItem(TOKEN_KEY);
     if (!raw) return null;
     const stored: StoredToken = JSON.parse(raw);
     if (Date.now() > stored.expiresAt) return null; // expired
@@ -61,8 +61,8 @@ export function getStoredToken(): StoredToken | null {
 }
 
 export function clearToken(): void {
-  sessionStorage.removeItem(TOKEN_KEY);
-  sessionStorage.removeItem(VERIFIER_KEY);
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(VERIFIER_KEY);
 }
 
 // ── Auth flow ──────────────────────────────────────────────────────────────────
@@ -72,7 +72,7 @@ export async function initiateSpotifyAuth(): Promise<void> {
   const challenge  = await generateChallenge(verifier);
   const redirectUri = `${window.location.origin}/`;
 
-  sessionStorage.setItem(VERIFIER_KEY, verifier);
+  localStorage.setItem(VERIFIER_KEY, verifier);
 
   const params = new URLSearchParams({
     client_id:             CLIENT_ID,
@@ -104,7 +104,7 @@ export async function handleAuthCallback(): Promise<boolean> {
   if (error) throw new Error(`Spotify auth denied: ${error}`);
   if (!code) return false;
 
-  const verifier    = sessionStorage.getItem(VERIFIER_KEY);
+  const verifier    = localStorage.getItem(VERIFIER_KEY);
   const redirectUri = `${window.location.origin}/`;
 
   if (!verifier) throw new Error('PKCE verifier missing — please try connecting again.');
@@ -127,6 +127,6 @@ export async function handleAuthCallback(): Promise<boolean> {
   }
 
   saveToken(await res.json());
-  sessionStorage.removeItem(VERIFIER_KEY);
+  localStorage.removeItem(VERIFIER_KEY);
   return true;
 }
