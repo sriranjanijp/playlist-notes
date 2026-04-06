@@ -8,34 +8,40 @@ export function parsePlaylistId(input: string): string | null {
   return null;
 }
 
-/**
- * Fetch a playlist directly from Spotify using the user's OAuth token.
- * Handles pagination for playlists with more than 100 tracks.
- */
 export async function fetchPlaylist(playlistId: string, accessToken: string): Promise<SpotifyPlaylist> {
-  const headers = { Authorization: `Bearer ${accessToken}` };
+  if (!accessToken) {
+    throw new Error('No access token — please reconnect to Spotify.');
+  }
+
+  const headers = new Headers({
+    'Authorization': `Bearer ${accessToken}`,
+  });
 
   const res = await fetch(
-    `https://api.spotify.com/v1/playlists/${playlistId}?market=from_token`,
+    `https://api.spotify.com/v1/playlists/${playlistId}`,
     { headers }
   );
 
   if (!res.ok) {
-    const e = await res.json().catch(() => ({}));
+    const e = await res.json().catch(() => ({})) as { error?: { message?: string } };
     throw new Error(e.error?.message ?? `Spotify error (HTTP ${res.status})`);
   }
 
-  const playlist: SpotifyPlaylist = await res.json();
+  const playlist = await res.json() as SpotifyPlaylist;
 
-  // Page through remaining tracks beyond the first 100
+  if (!playlist.tracks) {
+    throw new Error('Spotify returned no track data for this playlist.');
+  }
+
+  // Page through tracks beyond the first 100
   let offset = 100;
   while (offset < playlist.tracks.total) {
     const pg = await fetch(
-      `https://api.spotify.com/v1/playlists/${playlistId}/tracks?offset=${offset}&limit=100&market=from_token`,
+      `https://api.spotify.com/v1/playlists/${playlistId}/tracks?offset=${offset}&limit=100`,
       { headers }
     );
     if (!pg.ok) break;
-    const pgData = await pg.json();
+    const pgData = await pg.json() as { items: SpotifyPlaylist['tracks']['items'] };
     playlist.tracks.items.push(...(pgData.items ?? []));
     offset += 100;
   }
