@@ -16,7 +16,7 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
   const headers = { Authorization: `Bearer ${accessToken}` };
 
   const res = await fetch(
-    `https://api.spotify.com/v1/playlists/${playlistId}?market=from_token&fields=id,name,description,images,owner,tracks(total,items(track(id,name,duration_ms,artists,album,preview_url)))`,
+    `https://api.spotify.com/v1/playlists/${playlistId}?market=from_token`,
     { headers }
   );
 
@@ -31,7 +31,7 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
   let offset = 100;
   while (offset < playlist.tracks.total) {
     const pg = await fetch(
-      `https://api.spotify.com/v1/playlists/${playlistId}/tracks?offset=${offset}&limit=100&market=from_token&fields=items(track(id,name,duration_ms,artists,album,preview_url))`,
+      `https://api.spotify.com/v1/playlists/${playlistId}/tracks?offset=${offset}&limit=100&market=from_token`,
       { headers }
     );
     if (!pg.ok) break;
