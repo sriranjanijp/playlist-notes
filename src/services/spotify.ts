@@ -18,7 +18,7 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
   });
 
   const res = await fetch(
-    `https://api.spotify.com/v1/playlists/${playlistId}`,
+    `https://api.spotify.com/v1/playlists/${playlistId}?market=from_token`,
     { headers, cache: 'no-store' }
   );
 
@@ -30,18 +30,33 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
   const playlist = await res.json() as SpotifyPlaylist | { error?: { status?: number; message?: string } };
 
   if (!('tracks' in playlist) || !playlist.tracks) {
-    console.error('[spotify] Playlist response missing tracks:', playlist);
+    console.warn('[spotify] Playlist response missing tracks, using fallback track fetch');
     if ('error' in playlist && playlist.error?.message) {
       throw new Error(`Spotify API error: ${playlist.error.message}`);
     }
-    throw new Error('Spotify returned no track data for this playlist.');
+
+    const fallback = await fetch(
+      `https://api.spotify.com/v1/playlists/${playlistId}/tracks?market=from_token&limit=100`,
+      { headers, cache: 'no-store' }
+    );
+
+    if (!fallback.ok) {
+      const e = await fallback.json().catch(() => ({})) as { error?: { message?: string } };
+      throw new Error(e.error?.message ?? `Spotify tracks fallback failed (HTTP ${fallback.status})`);
+    }
+
+    const fallbackData = await fallback.json() as { total: number; items: SpotifyPlaylist['tracks']['items'] };
+    (playlist as SpotifyPlaylist).tracks = {
+      total: fallbackData.total,
+      items: fallbackData.items ?? [],
+    };
   }
 
   // Page through tracks beyond the first 100
   let offset = 100;
   while (offset < playlist.tracks.total) {
     const pg = await fetch(
-      `https://api.spotify.com/v1/playlists/${playlistId}/tracks?offset=${offset}&limit=100`,
+      `https://api.spotify.com/v1/playlists/${playlistId}/tracks?offset=${offset}&limit=100&market=from_token`,
       { headers, cache: 'no-store' }
     );
     if (!pg.ok) {
@@ -54,7 +69,7 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
     offset += 100;
   }
 
-  return playlist;
+  return playlist as SpotifyPlaylist;
 }
 
 export function formatDuration(ms: number): string {
