@@ -20,16 +20,12 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
 
   const headers = {
     Authorization: `Bearer ${accessToken}`,
-    Accept: 'application/json',
   };
-  console.log('[spotify] fetchPlaylist headers', {
-    Authorization: accessToken ? 'Bearer <token>' : 'none',
-    Accept: headers.Accept,
-  });
+  console.log('[spotify] fetchPlaylist headers', JSON.stringify(headers));
 
   const res = await fetch(
     `https://api.spotify.com/v1/playlists/${playlistId}`,
-    { headers, cache: 'no-store' }
+    { headers, mode: 'cors', cache: 'no-store' }
   );
 
   if (!res.ok) {
