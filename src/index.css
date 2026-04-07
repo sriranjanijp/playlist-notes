@@ -104,8 +104,8 @@ a {
   justify-content: center;
   gap: .5rem;
   background: var(--accent);
-  color: #000;
-  font-weight: 600;
+  color: var(--bg-surface);
+  font-weight: 400;
   font-size: .9rem;
   padding: .75rem 1.5rem;
   border: none;
@@ -835,14 +835,11 @@ a {
 .connected-badge {
   display: inline-flex;
   align-items: center;
-  gap: .4rem;
-  background: var(--bg-elevated);
+  gap: .6rem;
   color: var(--text-secondary);
-  border: 1px solid var(--border);
-  border-radius: 500px;
   padding: .45rem 1rem;
   font-size: .8rem;
-  font-weight: 600;
+  font-weight: 400;
 }
 
 .disconnect-btn{
@@ -852,5 +849,5 @@ a {
   border-radius: 500px;
   padding: .45rem 1rem;
   font-size: .8rem;
-  font-weight: 600;
+  font-weight: 400;
 }
