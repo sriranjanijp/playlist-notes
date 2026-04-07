@@ -2,7 +2,7 @@ import {
   doc, setDoc, updateDoc, onSnapshot, serverTimestamp, FirestoreError,
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import type { Session, Track, SpotifyPlaylist, SpotifyPlaylistItem } from '../types';
+import type { Session, Track, SpotifyPlaylist } from '../types';
 
 function generateSessionId(): string {
   return crypto.randomUUID().replace(/-/g, '').slice(0, 12);
