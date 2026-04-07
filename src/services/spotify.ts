@@ -39,8 +39,11 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
     throw new Error(e?.message ?? `Spotify error (HTTP ${res.status})`);
   }
 
-  const playlist = await res.json() as SpotifyPlaylist;
-  if (!playlist.tracks) {
+  const playlist = await res.json() as unknown;
+  console.log('[spotify] fetchPlaylist response keys', playlist && typeof playlist === 'object' ? Object.keys(playlist) : playlist);
+  console.log('[spotify] fetchPlaylist tracks', playlist && typeof playlist === 'object' ? (playlist as any).tracks : undefined);
+  const playlistData = playlist as SpotifyPlaylist;
+  if (!playlistData.tracks) {
     throw new Error('Spotify returned no track data for this playlist.');
   }
 
