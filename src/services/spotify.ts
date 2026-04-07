@@ -27,9 +27,13 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
     throw new Error(e.error?.message ?? `Spotify error (HTTP ${res.status})`);
   }
 
-  const playlist = await res.json() as SpotifyPlaylist;
+  const playlist = await res.json() as SpotifyPlaylist | { error?: { status?: number; message?: string } };
 
-  if (!playlist.tracks) {
+  if (!('tracks' in playlist) || !playlist.tracks) {
+    console.error('[spotify] Playlist response missing tracks:', playlist);
+    if ('error' in playlist && playlist.error?.message) {
+      throw new Error(`Spotify API error: ${playlist.error.message}`);
+    }
     throw new Error('Spotify returned no track data for this playlist.');
   }
 
@@ -40,7 +44,11 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
       `https://api.spotify.com/v1/playlists/${playlistId}/tracks?offset=${offset}&limit=100`,
       { headers, cache: 'no-store' }
     );
-    if (!pg.ok) break;
+    if (!pg.ok) {
+      const e = await pg.json().catch(() => ({})) as { error?: { message?: string } };
+      console.error('[spotify] Track page fetch failed:', pg.status, e);
+      break;
+    }
     const pgData = await pg.json() as { items: SpotifyPlaylist['tracks']['items'] };
     playlist.tracks.items.push(...(pgData.items ?? []));
     offset += 100;
