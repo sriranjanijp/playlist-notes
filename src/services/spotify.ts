@@ -13,10 +13,19 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
     throw new Error('No access token — please reconnect to Spotify.');
   }
 
+  console.log('[spotify] fetchPlaylist start', {
+    playlistId,
+    tokenPreview: `${accessToken.slice(0, 4)}...${accessToken.slice(-4)}`,
+  });
+
   const headers = {
     Authorization: `Bearer ${accessToken}`,
     Accept: 'application/json',
   };
+  console.log('[spotify] fetchPlaylist headers', {
+    Authorization: accessToken ? 'Bearer <token>' : 'none',
+    Accept: headers.Accept,
+  });
 
   const res = await fetch(
     `https://api.spotify.com/v1/playlists/${playlistId}`,

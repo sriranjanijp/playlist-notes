@@ -57,11 +57,14 @@ export default function Home() {
     const token = getStoredToken();
 
     if (!token) {
+      console.log('[spotify] handleCreate no stored token');
       // Token expired or missing — prompt re-auth instead of silently failing
       setStatus('unauthenticated');
       setErrorMsg('Your Spotify session expired. Please reconnect.');
       return;
     }
+
+    console.log('[spotify] handleCreate token', `${token.accessToken.slice(0, 4)}...${token.accessToken.slice(-4)}`);
 
     const playlistId = parsePlaylistId(input);
     if (!playlistId) {
