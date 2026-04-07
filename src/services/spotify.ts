@@ -76,13 +76,11 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
 
   // Fetch remaining pages if needed
   let items = playlistData.tracks.items ?? [];
-  console.log('[spotify] fetchPlaylist items debug', { count: items.length, sample: items[0] ? Object.keys(items[0]) : 'none' });
 
   let offset = items.length;
   const total = playlistData.tracks.total ?? items.length;
 
   while (offset < total) {
-    console.log(`[spotify] fetchPlaylist fetching page: offset ${offset}/${total}`);
     const pg = await fetch(
       `https://api.spotify.com/v1/playlists/${playlistId}/tracks?offset=${offset}&limit=100`,
       { headers, cache: 'no-store' }

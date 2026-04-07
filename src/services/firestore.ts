@@ -11,18 +11,10 @@ function generateSessionId(): string {
 function normaliseTrack(item: any): Track | null {
   if (!item) return null;
 
-  const track = item.track || item;
+  // Some Spotify API versions/proxies use item.track, item.item, or the item itself.
+  const track = item.track || item.item || item;
 
-  if (!track?.id || !track.name) {
-    console.warn('[firestore] normaliseTrack: missing track id/name', {
-      itemKeys:  Object.keys(item).join(','),
-      itemType:  typeof item,
-      trackType: typeof track,
-      trackKeys: track ? Object.keys(track).join(',') : 'null',
-      preview:   JSON.stringify(item).slice(0, 100)
-    });
-    return null;
-  }
+  if (!track?.id || !track.name) return null;
 
   return {
     id:         track.id,
@@ -37,17 +29,10 @@ function normaliseTrack(item: any): Track | null {
 
 export async function createSession(playlist: SpotifyPlaylist): Promise<string> {
   const id = generateSessionId();
-  
-  console.log('[firestore] createSession: processing tracks', { 
-    playlistId: playlist.id, 
-    tracksCount: playlist.tracks?.items?.length 
-  });
 
   const tracks: Track[] = playlist.tracks.items
     .map(normaliseTrack)
     .filter((t): t is Track => t !== null);
-
-  console.log('[firestore] createSession: tracks mapped', { count: tracks.length });
 
   await setDoc(doc(db, 'sessions', id), {
     playlistId:    playlist.id,
