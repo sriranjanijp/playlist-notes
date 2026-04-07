@@ -18,10 +18,10 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
     tokenPreview: `${accessToken.slice(0, 4)}...${accessToken.slice(-4)}`,
   });
 
-  const headers = {
-    Authorization: `Bearer ${accessToken}`,
-  };
-  console.log('[spotify] fetchPlaylist headers', JSON.stringify(headers));
+  const headers = new Headers();
+  headers.set('Authorization', `Bearer ${accessToken}`);
+
+  console.log('[spotify] fetchPlaylist headers', { Authorization: `Bearer ${accessToken.slice(0, 4)}...` });
 
   const res = await fetch(
     `https://api.spotify.com/v1/playlists/${playlistId}`,
@@ -30,20 +30,26 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
 
   if (!res.ok) {
     const responseText = await res.text().catch(() => '');
-    let errorBody: unknown = responseText;
+    let errorBody: any = responseText;
     try { errorBody = JSON.parse(responseText); } catch {}
     console.error('[spotify] fetchPlaylist failed', { status: res.status, body: errorBody });
-    const e = typeof errorBody === 'object' && errorBody !== null && 'error' in errorBody
-      ? (errorBody as { error: { message?: string } }).error
-      : null;
+    const e = errorBody?.error;
     throw new Error(e?.message ?? `Spotify error (HTTP ${res.status})`);
   }
 
-  const playlistJson = await res.json() as unknown;
-  console.log('[spotify] fetchPlaylist response keys', playlistJson && typeof playlistJson === 'object' ? Object.keys(playlistJson) : playlistJson);
-  console.log('[spotify] fetchPlaylist tracks', playlistJson && typeof playlistJson === 'object' ? (playlistJson as any).tracks : undefined);
+  const playlistJson = await res.json() as any;
+  console.log('[spotify] fetchPlaylist response keys', Object.keys(playlistJson));
 
-  const playlistData = playlistJson as Partial<SpotifyPlaylist> & { items?: SpotifyPlaylist['tracks']['items']; total?: number; };
+  const playlistData = playlistJson as any;
+
+  // Robustly handle different response formats
+  if (!playlistData.tracks && playlistData.items) {
+    console.log('[spotify] fetchPlaylist: wrapping root items into tracks object');
+    playlistData.tracks = {
+      items: playlistData.items,
+      total: playlistData.total ?? playlistData.items.length,
+    };
+  }
 
   if (!playlistData.tracks) {
     console.warn('[spotify] fetchPlaylist missing tracks, using /tracks fallback');
@@ -62,34 +68,27 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
       items: fallbackData.items ?? [],
       total: fallbackData.total,
     };
-
-    let offset = 100;
-    while (offset < playlistData.tracks.total) {
-      const pg = await fetch(
-        `https://api.spotify.com/v1/playlists/${playlistId}/tracks?offset=${offset}&limit=100`,
-        { headers, cache: 'no-store' }
-      );
-      if (!pg.ok) break;
-      const pgData = await pg.json() as { items: SpotifyPlaylist['tracks']['items'] };
-      playlistData.tracks.items.push(...(pgData.items ?? []));
-      offset += 100;
-    }
-
-    return playlistData as SpotifyPlaylist;
   }
 
-  let offset = 100;
-  while (offset < playlistData.tracks.total) {
+  // Fetch remaining pages if needed
+  let items = playlistData.tracks.items ?? [];
+  let offset = items.length;
+  const total = playlistData.tracks.total ?? items.length;
+
+  while (offset < total) {
+    console.log(`[spotify] fetchPlaylist fetching page: offset ${offset}/${total}`);
     const pg = await fetch(
       `https://api.spotify.com/v1/playlists/${playlistId}/tracks?offset=${offset}&limit=100`,
       { headers, cache: 'no-store' }
     );
     if (!pg.ok) break;
     const pgData = await pg.json() as { items: SpotifyPlaylist['tracks']['items'] };
-    playlistData.tracks.items.push(...(pgData.items ?? []));
-    offset += 100;
+    if (!pgData.items || pgData.items.length === 0) break;
+    items.push(...pgData.items);
+    offset += pgData.items.length;
   }
 
+  playlistData.tracks.items = items;
   return playlistData as SpotifyPlaylist;
 }
 
