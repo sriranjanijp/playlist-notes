@@ -15,7 +15,6 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
 
   const headers = new Headers({
     'Authorization': `Bearer ${accessToken}`,
-    'Cache-Control': 'no-cache',
   });
 
   const res = await fetch(
