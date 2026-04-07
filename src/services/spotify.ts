@@ -29,8 +29,14 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
   );
 
   if (!res.ok) {
-    const e = await res.json().catch(() => ({})) as { error?: { message?: string } };
-    throw new Error(e.error?.message ?? `Spotify error (HTTP ${res.status})`);
+    const responseText = await res.text().catch(() => '');
+    let errorBody: unknown = responseText;
+    try { errorBody = JSON.parse(responseText); } catch {}
+    console.error('[spotify] fetchPlaylist failed', { status: res.status, body: errorBody });
+    const e = typeof errorBody === 'object' && errorBody !== null && 'error' in errorBody
+      ? (errorBody as { error: { message?: string } }).error
+      : null;
+    throw new Error(e?.message ?? `Spotify error (HTTP ${res.status})`);
   }
 
   const playlist = await res.json() as SpotifyPlaylist;
