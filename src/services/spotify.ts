@@ -36,19 +36,32 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
     const e = errorBody?.error;
     throw new Error(e?.message ?? `Spotify error (HTTP ${res.status})`);
   }
-
-  const playlistJson = await res.json() as any;
+  const playlistJson = await res.json();
   console.log('[spotify] fetchPlaylist response keys', Object.keys(playlistJson));
 
   const playlistData = playlistJson as any;
 
   // Robustly handle different response formats
   if (!playlistData.tracks && playlistData.items) {
-    console.log('[spotify] fetchPlaylist: wrapping root items into tracks object');
-    playlistData.tracks = {
-      items: playlistData.items,
-      total: playlistData.total ?? playlistData.items.length,
-    };
+    console.log('[spotify] fetchPlaylist: found items instead of tracks at root');
+    
+    // Determine the content of "items"
+    if (Array.isArray(playlistData.items)) {
+      console.log('[spotify] fetchPlaylist: items at root is an array');
+      playlistData.tracks = {
+        items: playlistData.items,
+        total: playlistData.total ?? playlistData.items.length,
+      };
+    } else if (playlistData.items && typeof playlistData.items === 'object') {
+      console.log('[spotify] fetchPlaylist: items at root is an object, checking for nested items');
+      // Some API versions/proxies rename tracks -> items but keep it as a paging object
+      if (Array.isArray(playlistData.items.items)) {
+        console.log('[spotify] fetchPlaylist: found nested items array');
+        playlistData.tracks = playlistData.items;
+      } else {
+        console.warn('[spotify] fetchPlaylist: root items object does not contain an items array');
+      }
+    }
   }
 
   if (!playlistData.tracks) {
