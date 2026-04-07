@@ -43,9 +43,39 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
   console.log('[spotify] fetchPlaylist response keys', playlistJson && typeof playlistJson === 'object' ? Object.keys(playlistJson) : playlistJson);
   console.log('[spotify] fetchPlaylist tracks', playlistJson && typeof playlistJson === 'object' ? (playlistJson as any).tracks : undefined);
 
-  const playlistData = playlistJson as SpotifyPlaylist;
+  const playlistData = playlistJson as Partial<SpotifyPlaylist> & { items?: SpotifyPlaylist['tracks']['items']; total?: number; };
+
   if (!playlistData.tracks) {
-    throw new Error('Spotify returned no track data for this playlist.');
+    console.warn('[spotify] fetchPlaylist missing tracks, using /tracks fallback');
+    const fallback = await fetch(
+      `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`,
+      { headers, cache: 'no-store' }
+    );
+
+    if (!fallback.ok) {
+      const errorBody = await fallback.json().catch(() => ({})) as { error?: { message?: string } };
+      throw new Error(errorBody.error?.message ?? `Spotify tracks fallback failed (HTTP ${fallback.status})`);
+    }
+
+    const fallbackData = await fallback.json() as { items: SpotifyPlaylist['tracks']['items']; total: number; next?: string };
+    playlistData.tracks = {
+      items: fallbackData.items ?? [],
+      total: fallbackData.total,
+    };
+
+    let offset = 100;
+    while (offset < playlistData.tracks.total) {
+      const pg = await fetch(
+        `https://api.spotify.com/v1/playlists/${playlistId}/tracks?offset=${offset}&limit=100`,
+        { headers, cache: 'no-store' }
+      );
+      if (!pg.ok) break;
+      const pgData = await pg.json() as { items: SpotifyPlaylist['tracks']['items'] };
+      playlistData.tracks.items.push(...(pgData.items ?? []));
+      offset += 100;
+    }
+
+    return playlistData as SpotifyPlaylist;
   }
 
   let offset = 100;
@@ -60,7 +90,7 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
     offset += 100;
   }
 
-  return playlistData;
+  return playlistData as SpotifyPlaylist;
 }
 
 export function formatDuration(ms: number): string {
