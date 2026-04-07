@@ -14,7 +14,13 @@ function normaliseTrack(item: any): Track | null {
   const track = item.track || item;
 
   if (!track?.id || !track.name) {
-    console.warn('[firestore] normaliseTrack: missing track id/name', { itemKeys: Object.keys(item), trackKeys: track ? Object.keys(track) : 'null' });
+    console.warn('[firestore] normaliseTrack: missing track id/name', {
+      itemKeys:  Object.keys(item).join(','),
+      itemType:  typeof item,
+      trackType: typeof track,
+      trackKeys: track ? Object.keys(track).join(',') : 'null',
+      preview:   JSON.stringify(item).slice(0, 100)
+    });
     return null;
   }
 
