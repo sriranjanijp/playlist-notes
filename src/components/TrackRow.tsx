@@ -29,13 +29,11 @@ export default function TrackRow({ track, note = '', readOnly, onNoteChange, ind
 
   return (
     <div className="track-row-wrap">
-      {/* ── Main row ── */}
+      
       <div className="track-row">
-        {/* Track info */}
+        
         <div className="track-info">
           <span className="track-index">{index + 1}</span>
-
-          {/* Preview toggle button */}
           <button
             className={`preview-player${previewOpen ? ' preview-player--playing' : ''}`}
             onClick={() => setPreviewOpen((v) => !v)}
