@@ -44,7 +44,7 @@ export default function TrackRow({ track, note = '', readOnly, onNoteChange, ind
           >
             {previewOpen ? (
               <svg
-                viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
                 strokeWidth="2.5" strokeLinecap="round" width="11" height="11"
               >
                 <line x1="18" y1="6" x2="6" y2="18" />
@@ -53,7 +53,7 @@ export default function TrackRow({ track, note = '', readOnly, onNoteChange, ind
             ) : (
               <svg
                 viewBox="0 0 24 24"
-                fill="currentColor"
+                fill="var(--accent)"
                 width="15"
                 height="15"
               >
@@ -66,7 +66,7 @@ export default function TrackRow({ track, note = '', readOnly, onNoteChange, ind
             <img src={track.albumArt} alt={track.album} className="track-art" />
           ) : (
             <div className="track-art track-art--placeholder">
-              <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+              <svg viewBox="0 0 24 24" fill="var(--accent)" width="16" height="16">
                 <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z" />
               </svg>
             </div>
