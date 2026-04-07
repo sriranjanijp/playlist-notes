@@ -76,6 +76,8 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
 
   // Fetch remaining pages if needed
   let items = playlistData.tracks.items ?? [];
+  console.log('[spotify] fetchPlaylist items debug', { count: items.length, sample: items[0] ? Object.keys(items[0]) : 'none' });
+
   let offset = items.length;
   const total = playlistData.tracks.total ?? items.length;
 
