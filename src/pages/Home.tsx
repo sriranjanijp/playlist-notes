@@ -131,7 +131,7 @@ export default function Home() {
               </p>
             )}
             <button className="btn-spotify" onClick={initiateSpotifyAuth}>
-              <SpotifyIcon size={20} />
+              <SpotifyIcon size={20} color="var(--bg-surface)" />
               Connect with Spotify
             </button>
             <p className="home-hint" style={{ marginTop: '1rem' }}>
