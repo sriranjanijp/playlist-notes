@@ -13,73 +13,23 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
     throw new Error('No access token — please reconnect to Spotify.');
   }
 
-  const headers = {
-    Authorization: `Bearer ${accessToken}`,
-    Accept: 'application/json',
-  };
-
   const res = await fetch(
-    `https://api.spotify.com/v1/playlists/${playlistId}`,
-    { headers, cache: 'no-store' }
+    `/api/playlist/${playlistId}`,
+    { cache: 'no-store' }
   );
+
+  const body = await res.json().catch(() => ({})) as SpotifyPlaylist | { error?: string };
 
   if (!res.ok) {
-    const e = await res.json().catch(() => ({})) as { error?: { message?: string } };
-    throw new Error(e.error?.message ?? `Spotify error (HTTP ${res.status})`);
+    throw new Error((body as { error?: string }).error ?? `Playlist fetch failed (HTTP ${res.status})`);
   }
 
-  const playlistJson = await res.json() as unknown;
-  const playlist = playlistJson as SpotifyPlaylist;
-
-  const hasTracks = (
-    typeof playlistJson === 'object' &&
-    playlistJson !== null &&
-    'tracks' in playlistJson &&
-    (playlistJson as any).tracks
-  );
-
-  if (!hasTracks) {
-    console.warn('[spotify] Playlist response missing tracks, using fallback track fetch');
-    const maybeError = playlistJson as { error?: { status?: number; message?: string } };
-    if (maybeError.error?.message) {
-      throw new Error(`Spotify API error: ${maybeError.error.message}`);
-    }
-
-    const fallback = await fetch(
-      `https://api.spotify.com/v1/playlists/${playlistId}/tracks?offset=0&limit=100`,
-      { headers, cache: 'no-store' }
-    );
-
-    if (!fallback.ok) {
-      const e = await fallback.json().catch(() => ({})) as { error?: { message?: string } };
-      throw new Error(e.error?.message ?? `Spotify tracks fallback failed (HTTP ${fallback.status})`);
-    }
-
-    const fallbackData = await fallback.json() as { total: number; items: SpotifyPlaylist['tracks']['items'] };
-    playlist.tracks = {
-      total: fallbackData.total,
-      items: fallbackData.items ?? [],
-    };
+  const playlist = body as SpotifyPlaylist;
+  if (!playlist.tracks) {
+    throw new Error('Spotify returned no track data for this playlist.');
   }
 
-  // Page through tracks beyond the first 100
-  let offset = 100;
-  while (offset < playlist.tracks.total) {
-    const pg = await fetch(
-      `https://api.spotify.com/v1/playlists/${playlistId}/tracks?offset=${offset}&limit=100`,
-      { headers, cache: 'no-store' }
-    );
-    if (!pg.ok) {
-      const e = await pg.json().catch(() => ({})) as { error?: { message?: string } };
-      console.error('[spotify] Track page fetch failed:', pg.status, e);
-      break;
-    }
-    const pgData = await pg.json() as { items: SpotifyPlaylist['tracks']['items'] };
-    playlist.tracks.items.push(...(pgData.items ?? []));
-    offset += 100;
-  }
-
-  return playlist as SpotifyPlaylist;
+  return playlist;
 }
 
 export function formatDuration(ms: number): string {
