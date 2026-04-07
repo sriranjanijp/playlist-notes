@@ -27,12 +27,21 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
     throw new Error(e.error?.message ?? `Spotify error (HTTP ${res.status})`);
   }
 
-  const playlist = await res.json() as SpotifyPlaylist | { error?: { status?: number; message?: string } };
+  const playlistJson = await res.json() as unknown;
+  const playlist = playlistJson as SpotifyPlaylist;
 
-  if (!('tracks' in playlist) || !playlist.tracks) {
+  const hasTracks = (
+    typeof playlistJson === 'object' &&
+    playlistJson !== null &&
+    'tracks' in playlistJson &&
+    (playlistJson as any).tracks
+  );
+
+  if (!hasTracks) {
     console.warn('[spotify] Playlist response missing tracks, using fallback track fetch');
-    if ('error' in playlist && playlist.error?.message) {
-      throw new Error(`Spotify API error: ${playlist.error.message}`);
+    const maybeError = playlistJson as { error?: { status?: number; message?: string } };
+    if (maybeError.error?.message) {
+      throw new Error(`Spotify API error: ${maybeError.error.message}`);
     }
 
     const fallback = await fetch(
@@ -46,7 +55,7 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
     }
 
     const fallbackData = await fallback.json() as { total: number; items: SpotifyPlaylist['tracks']['items'] };
-    (playlist as SpotifyPlaylist).tracks = {
+    playlist.tracks = {
       total: fallbackData.total,
       items: fallbackData.items ?? [],
     };
