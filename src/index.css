@@ -156,6 +156,7 @@ a {
   backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--border);
   font-family: var(--font-title);
+  font-size: 1.6rem;
 }
 
 .top-bar-logo {
@@ -498,6 +499,7 @@ a {
   color: var(--text-primary);
   margin-bottom: 1.75rem;
   font-family: var(--font-title);
+  font-size: 1.6rem;
 }
 
 .home-logo svg {

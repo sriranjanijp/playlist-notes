@@ -116,7 +116,7 @@ export default function Home() {
   return (
     <div className="home-page">
       <div className="home-card">
-        <div className="home-logo"><SpotifyIcon /><span>Playlist Notes</span></div>
+        <div className="home-logo">Playlist Notes</div>
 
         <h1 className="home-title">Annotate any Spotify playlist</h1>
         <p className="home-subtitle">
