@@ -13,14 +13,19 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
     throw new Error('No access token — please reconnect to Spotify.');
   }
 
-  const headers = new Headers({
-    'Authorization': `Bearer ${accessToken}`,
-    'Cache-Control': 'no-cache',
+  console.log('[spotify] fetchPlaylist start', {
+    playlistId,
+    tokenPreview: `${accessToken.slice(0, 4)}...${accessToken.slice(-4)}`,
   });
+
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+  };
+  console.log('[spotify] fetchPlaylist headers', JSON.stringify(headers));
 
   const res = await fetch(
     `https://api.spotify.com/v1/playlists/${playlistId}`,
-    { headers }
+    { headers, mode: 'cors', cache: 'no-store' }
   );
 
   if (!res.ok) {
@@ -29,17 +34,15 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
   }
 
   const playlist = await res.json() as SpotifyPlaylist;
-
   if (!playlist.tracks) {
     throw new Error('Spotify returned no track data for this playlist.');
   }
 
-  // Page through tracks beyond the first 100
   let offset = 100;
   while (offset < playlist.tracks.total) {
     const pg = await fetch(
       `https://api.spotify.com/v1/playlists/${playlistId}/tracks?offset=${offset}&limit=100`,
-      { headers }
+      { headers, cache: 'no-store' }
     );
     if (!pg.ok) break;
     const pgData = await pg.json() as { items: SpotifyPlaylist['tracks']['items'] };
