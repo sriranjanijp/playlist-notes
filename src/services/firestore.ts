@@ -8,16 +8,22 @@ function generateSessionId(): string {
   return crypto.randomUUID().replace(/-/g, '').slice(0, 12);
 }
 
-function normaliseTrack(item: SpotifyPlaylistItem): Track | null {
-  const track = item?.track;
-  if (!track?.id) return null;
+function normaliseTrack(item: any): Track | null {
+  if (!item) return null;
+
+  // Spotify Playlist responses wrap tracks in a { track: SpotifyTrack } object.
+  // Other responses (like direct track lists) might return the Track directly.
+  const track = item.track || item;
+
+  if (!track?.id || !track.name) return null;
+
   return {
     id:         track.id,
     name:       track.name,
-    artists:    track.artists.map((a) => a.name).join(', '),
-    album:      track.album.name,
-    albumArt:   track.album.images[2]?.url ?? track.album.images[0]?.url ?? '',
-    duration:   track.duration_ms,
+    artists:    Array.isArray(track.artists) ? track.artists.map((a: any) => a.name).join(', ') : '',
+    album:      track.album?.name ?? 'Unknown Album',
+    albumArt:   track.album?.images?.[2]?.url ?? track.album?.images?.[0]?.url ?? '',
+    duration:   track.duration_ms ?? 0,
     previewUrl: track.preview_url ?? '',
   };
 }
