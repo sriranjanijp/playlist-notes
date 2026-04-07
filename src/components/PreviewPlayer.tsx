@@ -1,52 +1,110 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface PreviewPlayerProps {
-  trackId:   string;
-  trackName: string;
+  previewUrl: string;
+  trackName:  string;
 }
 
-export default function PreviewPlayer({ trackId, trackName }: PreviewPlayerProps) {
-  const [open, setOpen] = useState(false);
+type PlayerState = 'idle' | 'loading' | 'playing' | 'paused' | 'unavailable';
 
-  const embedUrl =
-    `https://open.spotify.com/embed/track/${trackId}` +
-    `?utm_source=generator&theme=0`;
+export default function PreviewPlayer({ previewUrl, trackName }: PreviewPlayerProps) {
+  const audioRef              = useRef<HTMLAudioElement | null>(null);
+  const [state, setState]     = useState<PlayerState>(previewUrl ? 'idle' : 'unavailable');
+  const [progress, setProgress] = useState(0); // 0–100
+
+  // Re-init when URL changes (different track row)
+  useEffect(() => {
+    setState(previewUrl ? 'idle' : 'unavailable');
+    setProgress(0);
+
+    return () => {
+      // Pause on unmount / URL change
+      audioRef.current?.pause();
+    };
+  }, [previewUrl]);
+
+  function toggle() {
+    if (state === 'unavailable') return;
+
+    if (!audioRef.current) {
+      audioRef.current = new Audio(previewUrl);
+
+      audioRef.current.addEventListener('canplay', () => setState('playing'));
+      audioRef.current.addEventListener('waiting',  () => setState('loading'));
+      audioRef.current.addEventListener('ended',    () => { setState('idle'); setProgress(0); });
+      audioRef.current.addEventListener('error',    () => setState('unavailable'));
+
+      audioRef.current.addEventListener('timeupdate', () => {
+        const a = audioRef.current;
+        if (a && a.duration) setProgress((a.currentTime / a.duration) * 100);
+      });
+    }
+
+    if (state === 'playing') {
+      audioRef.current.pause();
+      setState('paused');
+    } else {
+      // Pause any other playing audio on the page
+      document.querySelectorAll('audio').forEach((a) => {
+        if (a !== audioRef.current) a.pause();
+      });
+      setState('loading');
+      audioRef.current.play().catch(() => setState('unavailable'));
+    }
+  }
+
+  if (state === 'unavailable') {
+    return (
+      <div className="preview-player preview-player--unavailable" title="No preview available">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+          width="13" height="13">
+          <line x1="1" y1="1" x2="23" y2="23"/>
+          <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
+          <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/>
+          <line x1="12" y1="19" x2="12" y2="23"/>
+          <line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+      </div>
+    );
+  }
 
   return (
-    <div className="preview-wrap">
-      <button
-        className={`preview-player${open ? ' preview-player--playing' : ''}`}
-        onClick={() => setOpen((v) => !v)}
-        title={open ? `Close preview — ${trackName}` : `Preview — ${trackName}`}
-        aria-label={open ? 'Close preview' : 'Open preview'}
-      >
-        {open ? (
-          /* X / close */
+    <button
+      className={`preview-player ${state === 'playing' ? 'preview-player--playing' : ''}`}
+      onClick={toggle}
+      title={state === 'playing' ? `Pause preview — ${trackName}` : `Play 30s preview — ${trackName}`}
+    >
+      {/* Progress ring */}
+      <svg className="preview-ring" viewBox="0 0 36 36" width="32" height="32">
+        <circle cx="18" cy="18" r="15" fill="none" stroke="currentColor"
+          strokeWidth="2" strokeOpacity="0.15"/>
+        <circle
+          cx="18" cy="18" r="15" fill="none"
+          stroke="var(--accent)" strokeWidth="2"
+          strokeDasharray={`${2 * Math.PI * 15}`}
+          strokeDashoffset={`${2 * Math.PI * 15 * (1 - progress / 100)}`}
+          strokeLinecap="round"
+          transform="rotate(-90 18 18)"
+          style={{ transition: 'stroke-dashoffset 0.25s linear' }}
+        />
+      </svg>
+
+      {/* Icon */}
+      <span className="preview-icon">
+        {state === 'loading' ? (
+          <span className="spinner" style={{ width: 10, height: 10, borderWidth: 1.5 }} />
+        ) : state === 'playing' ? (
+          // Pause bars
           <svg viewBox="0 0 24 24" fill="currentColor" width="11" height="11">
-            <line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
-            <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+            <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
           </svg>
         ) : (
-          /* Spotify logo mark */
-          <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.65 14.42a.625.625 0 0 1-.86.2c-2.36-1.44-5.33-1.77-8.83-.97a.624.624 0 1 1-.28-1.22c3.83-.87 7.1-.5 9.77 1.13.3.18.39.56.2.86zm1.24-2.76a.78.78 0 0 1-1.07.26C14.3 12.18 11 11.7 7.82 12.6a.78.78 0 0 1-.97-.52.78.78 0 0 1 .52-.97c3.58-1.03 7.27-.5 10.06 1.48a.78.78 0 0 1 .26 1.07zm.11-2.87C14.63 8.85 9.87 8.7 7.07 9.56a.937.937 0 1 1-.54-1.8c3.19-.96 8.5-.77 11.84 1.35a.94.94 0 0 1-1.37 1.28z"/>
+          // Play triangle
+          <svg viewBox="0 0 24 24" fill="currentColor" width="11" height="11">
+            <polygon points="5,3 19,12 5,21"/>
           </svg>
         )}
-      </button>
-
-      {open && (
-        <div className="preview-embed">
-          <iframe
-            src={embedUrl}
-            width="100%"
-            height="80"
-            frameBorder="0"
-            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-            loading="lazy"
-            title={`Preview: ${trackName}`}
-          />
-        </div>
-      )}
-    </div>
+      </span>
+    </button>
   );
 }
