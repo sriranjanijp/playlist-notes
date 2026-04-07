@@ -20,7 +20,7 @@
   --radius-lg: 16px;
   --shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
   --font: 'Sora', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-title: 'Limelight'
+  --font-title: 'Limelight', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 /* ── Reset ──────────────────────────────────────────────────────────────────── */
@@ -499,6 +499,7 @@ a {
   font-size: 1rem;
   color: var(--text-primary);
   margin-bottom: 1.75rem;
+  font: var(--font-title);
 }
 
 .home-logo svg {
@@ -829,4 +830,27 @@ a {
   cursor: pointer;
   width: 100%;
   gap: .6rem;
+}
+
+.connected-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 500px;
+  padding: .45rem 1rem;
+  font-size: .8rem;
+  font-weight: 600;
+}
+
+.disconnect-btn{
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 500px;
+  padding: .45rem 1rem;
+  font-size: .8rem;
+  font-weight: 600;
 }
