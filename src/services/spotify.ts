@@ -13,20 +13,36 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
     throw new Error('No access token — please reconnect to Spotify.');
   }
 
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+    Accept: 'application/json',
+  };
+
   const res = await fetch(
-    `/api/playlist/${playlistId}`,
-    { cache: 'no-store' }
+    `https://api.spotify.com/v1/playlists/${playlistId}?market=from_token`,
+    { headers, cache: 'no-store' }
   );
 
-  const body = await res.json().catch(() => ({})) as SpotifyPlaylist | { error?: string };
-
   if (!res.ok) {
-    throw new Error((body as { error?: string }).error ?? `Playlist fetch failed (HTTP ${res.status})`);
+    const e = await res.json().catch(() => ({})) as { error?: { message?: string } };
+    throw new Error(e.error?.message ?? `Spotify error (HTTP ${res.status})`);
   }
 
-  const playlist = body as SpotifyPlaylist;
+  const playlist = await res.json() as SpotifyPlaylist;
   if (!playlist.tracks) {
     throw new Error('Spotify returned no track data for this playlist.');
+  }
+
+  let offset = 100;
+  while (offset < playlist.tracks.total) {
+    const pg = await fetch(
+      `https://api.spotify.com/v1/playlists/${playlistId}/tracks?offset=${offset}&limit=100&market=from_token`,
+      { headers, cache: 'no-store' }
+    );
+    if (!pg.ok) break;
+    const pgData = await pg.json() as { items: SpotifyPlaylist['tracks']['items'] };
+    playlist.tracks.items.push(...(pgData.items ?? []));
+    offset += 100;
   }
 
   return playlist;
