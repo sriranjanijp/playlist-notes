@@ -183,7 +183,7 @@ a {
 
 .autosave-badge {
   font-size: .75rem;
-  color: #04A833;
+  color: #E2FEEA;
   letter-spacing: .02em;
   font-family: var(--font);
 }
@@ -845,7 +845,7 @@ a {
   font-weight: 400;
 }
 
-.disconnect-btn{
+.disconnect-btn {
   background: var(--bg-elevated);
   color: var(--text-secondary);
   border: 1px solid var(--border);
@@ -860,10 +860,10 @@ a {
   border: 2px solid transparent;
   padding: 0;
   cursor: pointer;
-  
+
   background-color: var(--bg-surface);
   color: var(--accent);
-  
+
   display: flex;
   justify-content: center;
   align-items: center;
