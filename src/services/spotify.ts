@@ -19,7 +19,7 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
 
   const res = await fetch(
     `https://api.spotify.com/v1/playlists/${playlistId}`,
-    { headers }
+    { headers, cache: 'no-store' }
   );
 
   if (!res.ok) {
@@ -38,7 +38,7 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
   while (offset < playlist.tracks.total) {
     const pg = await fetch(
       `https://api.spotify.com/v1/playlists/${playlistId}/tracks?offset=${offset}&limit=100`,
-      { headers }
+      { headers, cache: 'no-store' }
     );
     if (!pg.ok) break;
     const pgData = await pg.json() as { items: SpotifyPlaylist['tracks']['items'] };
