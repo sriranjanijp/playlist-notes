@@ -156,7 +156,7 @@ a {
   backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--border);
   font-family: var(--font-title);
-  font-size: 1.6rem;
+  font-size: 1.4rem;
 }
 
 .top-bar-logo {
@@ -168,7 +168,7 @@ a {
   color: var(--text-primary);
   cursor: pointer;
   font-family: var(--font-title);
-  font-size: 1.6rem;
+  font-size: 1.4rem;
 }
 
 .top-bar-logo svg {
@@ -183,8 +183,9 @@ a {
 
 .autosave-badge {
   font-size: .75rem;
-  color: var(--accent);
+  color: #04A833;
   letter-spacing: .02em;
+  font-family: var(--font);
 }
 
 .readonly-badge {
