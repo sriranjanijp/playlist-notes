@@ -13,9 +13,10 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
     throw new Error('No access token — please reconnect to Spotify.');
   }
 
-  const headers = new Headers({
-    'Authorization': `Bearer ${accessToken}`,
-  });
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+    Accept: 'application/json',
+  };
 
   const res = await fetch(
     `https://api.spotify.com/v1/playlists/${playlistId}?market=from_token`,
@@ -45,7 +46,7 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
     }
 
     const fallback = await fetch(
-      `https://api.spotify.com/v1/playlists/${playlistId}/tracks?market=from_token&limit=100`,
+      `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`,
       { headers, cache: 'no-store' }
     );
 
@@ -65,7 +66,7 @@ export async function fetchPlaylist(playlistId: string, accessToken: string): Pr
   let offset = 100;
   while (offset < playlist.tracks.total) {
     const pg = await fetch(
-      `https://api.spotify.com/v1/playlists/${playlistId}/tracks?offset=${offset}&limit=100&market=from_token`,
+      `https://api.spotify.com/v1/playlists/${playlistId}/tracks?offset=${offset}&limit=100`,
       { headers, cache: 'no-store' }
     );
     if (!pg.ok) {
