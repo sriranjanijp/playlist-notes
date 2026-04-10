@@ -1,8 +1,8 @@
 # Playlist Notes
 
-Annotate any Spotify playlist track-by-track and share a live read-only link with anyone.
-Hosted at: https://playlist-notes-by-sj.vercel.app/
-Project Demo: https://drive.google.com/drive/folders/17fFGO4OEoi8H1-H9XvVqhg2jaOJFmMp_?usp=sharing
+ - Annotate any Spotify playlist track-by-track and share a live read-only link with anyone.
+ - Hosted at: https://playlist-notes-by-sj.vercel.app/
+ - Project Demo: https://drive.google.com/drive/folders/17fFGO4OEoi8H1-H9XvVqhg2jaOJFmMp_?usp=sharing
 
 ### Disclaimer
 Due to the current spotify api rules, the app works only if logged in by users approved by the host account. The playlist-share links can be accessed by anyone. To make a new playlist annotation, user needs to be approved.
